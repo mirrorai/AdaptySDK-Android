@@ -1,6 +1,8 @@
 package com.adapty.purchase
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.adapty.api.AdaptyError
 import com.adapty.api.AdaptyErrorCode
 import com.adapty.api.AdaptyPaywallsInfoCallback
@@ -10,6 +12,7 @@ import com.adapty.utils.LogHelper
 import com.android.billingclient.api.*
 import com.android.billingclient.api.BillingClient.SkuType.INAPP
 import com.android.billingclient.api.BillingClient.SkuType.SUBS
+import java.util.concurrent.Executors
 
 
 class InAppPurchasesInfo(
@@ -17,6 +20,9 @@ class InAppPurchasesInfo(
     var purchases: ArrayList<Any>,
     var callback: AdaptyPaywallsInfoCallback
 ) {
+
+    private val backgroundExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private var productIterator: MutableIterator<Any> = purchases.iterator()
     private lateinit var billingClient: BillingClient
@@ -70,8 +76,13 @@ class InAppPurchasesInfo(
             getSkuList(data, INAPP).build()
         ) { result, skuDetailsList ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK && skuDetailsList != null) {
-                fillInfo(skuDetailsList, data)
-                querySkuDetailsSubs(data)
+                backgroundExecutor.submit {
+                    fillInfo(skuDetailsList, data)
+
+                    mainHandler.post {
+                        querySkuDetailsSubs(data)
+                    }
+                }
             } else
                 fail(
                     AdaptyError(
@@ -87,8 +98,13 @@ class InAppPurchasesInfo(
             getSkuList(data, SUBS).build()
         ) { result, skuDetailsList ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK && skuDetailsList != null) {
-                fillInfo(skuDetailsList, data)
-                iterator()
+                backgroundExecutor.submit {
+                    fillInfo(skuDetailsList, data)
+
+                    mainHandler.post {
+                        iterator()
+                    }
+                }
             } else
                 fail(
                     AdaptyError(
